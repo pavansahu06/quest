@@ -1,0 +1,60 @@
+pipeline {
+    agent none
+    options {
+        disableConcurrentBuilds()
+        skipDefaultCheckout true
+    }
+	triggers {
+        pollSCM('*/1 * * * *')
+    }
+    stages {
+        stage ('Parallel build will start on QSA Servers') {
+       
+            parallel {      		
+                stage ('QSA Build on Linux') {
+                    agent {
+                        label 'PSLSMLinux01'
+                    }
+                    stages {
+                        stage ('Clean and Checkout Workspace') {					   
+			                steps {
+                                cleanWs()
+								checkout scm
+                            }
+                        }
+						   
+                        stage('Build & Deploy') {
+                            steps {
+							    sh 'chmod -R +x /home/smdev/workspace/SM/QSA19C'
+                                sh '/home/smdev/workspace/SM/QSA19C/build.sh PSLSMLinux01 "${BUILD_NUMBER}"'
+                            }
+                        }
+   
+                    }
+                }
+			    stage ('QSA Build on AIX') {
+                    agent {
+                        label 'soaxp428'
+                    }
+                    stages {
+                        stage ('Clean and Checkout Workspace') {					   
+			                steps {
+                                cleanWs()
+								checkout scm
+                            }
+                        }
+
+                        stage('Build & Deploy') {
+                            steps {
+							    sh 'chmod -R +x /nis/home/dpdev/jenkins/workspace/SM/QSA19C'
+                                sh '/nis/home/dpdev/jenkins/workspace/SM/QSA19C/build.sh soaxp428 "${BUILD_NUMBER}"'
+                            }
+                        }
+   
+                    }
+                } 
+            }
+	    }
+	}
+}
+

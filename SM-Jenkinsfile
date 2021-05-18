@@ -1,0 +1,42 @@
+pipeline {
+ agent {
+  label 'PSLSMWinBuild02'
+        }
+ options {
+        disableConcurrentBuilds()
+		skipDefaultCheckout true
+    }
+ triggers {
+        pollSCM('*/1 * * * *')
+    }
+ stages {
+  stage ('Clean and Checkout Workspace') {					   
+   steps {
+      cleanWs()
+	  checkout scm
+     }
+    }
+  stage ('Dynamically pulling from Linux server PSLSMLinux01') {
+   steps { 
+     sshagent(['PSLSMWinBuild02-ssh-key']) {
+		 bat '''"C:\\Program Files\\Git\\usr\\bin\\whoami"'''	
+	     bat '''"C:\\Program Files\\Git\\usr\\bin\\scp" -o 'StrictHostKeyChecking no' smdev@10.240.75.6:/home/smdev/tar_file/*.sh "C:\\Jenkins\\workspace\\SM\\SpaceManager-Pipeline\\Supporting Modules and Files\\Agent\\Cd\\QuestServerAgent"'''
+         bat '''"C:\\Program Files\\Git\\usr\\bin\\scp" -o 'StrictHostKeyChecking no' smdev@10.240.75.6:/home/smdev/tar_file/QSA/*.txt "C:\\Jenkins\\workspace\\SM\\SpaceManager-Pipeline\\Supporting Modules and Files\\Agent\\Cd\\QuestServerAgent"'''
+         bat '''"C:\\Program Files\\Git\\usr\\bin\\scp" -o 'StrictHostKeyChecking no' smdev@10.240.75.6:/home/smdev/tar_file/QSA/*.tar.Z "C:\\Jenkins\\workspace\\SM\\SpaceManager-Pipeline\\Supporting Modules and Files\\Agent\\Cd\\QuestServerAgent"'''
+		}		 
+       }
+     }	   
+  stage ('Dynamically pulling from AIX server soaxp428') {
+   steps { 
+     sshagent(['PSLSMWinBuild02-ssh-key']) {
+	     bat '''"C:\\Program Files\\Git\\usr\\bin\\scp" -o 'StrictHostKeyChecking no' dpdev@10.240.47.71:/nis/home/dpdev/jenkins/tar_file/QSA/*.tar.Z "C:\\Jenkins\\workspace\\SM\\SpaceManager-Pipeline\\Supporting Modules and Files\\Agent\\Cd\\QuestServerAgent"'''
+		}		 
+       } 
+     }	   
+  stage('Build') {
+   steps {
+          bat '''"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Professional\\MSBuild\\Current\\Bin\\MSBuild" C:\\Jenkins\\workspace\\SM\\SpaceManager-Pipeline\\SpaceManager.sln /property:Configuration=Release /property:Platform=x64'''
+       }
+    }
+  }
+ }

@@ -1,0 +1,81 @@
+pipeline {​
+    agent {​ label 'spcld-jen-agent' }​
+    options {​
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }​
+    stages {​
+        stage('Build for TEST') {​
+            steps {​
+                powershell "build/build.ps1 -DeployEnvironment Test -DeployPath '${​getDeployPath()}​'"
+            }​
+        }​
+        stage('Deploy for TEST') {​
+            steps {​
+                withCredentials([string(credentialsId: 'f5453e01-4c8f-43bc-9494-972cbb732424', variable: 'SERVICE_PRINCIPAL_PASSWORD')]) {​
+                    powershell "build/deploy.ps1 -DeployEnvironment Test -DeployPath '${​getDeployPath()}​'"
+                }​
+            }​
+        }​
+        stage('Build for PROD') {​
+            when {​
+                branch 'master'
+            }​
+            steps {​
+                powershell "build/build.ps1 -DeployEnvironment Production -DeployPath '${​getDeployPath()}​'"
+            }​
+        }​
+        stage('Deploy for PROD') {​
+            when {​
+                branch 'master'
+            }​
+            steps {​
+                withCredentials([string(credentialsId: '7bb431d1-d5c1-4df6-abed-c343b7fea021', variable: 'SERVICE_PRINCIPAL_PASSWORD')]) {​
+                    powershell "build/deploy.ps1 -DeployEnvironment Production -DeployPath '${​getDeployPath()}​'"
+                }​
+            }​
+        }​
+    }​
+    post {​
+        success {​
+            script {​
+                testEnvProperties = readProperties file: 'build/Test.properties'
+                prodEnvProperties = readProperties file: 'build/Production.properties'
+                if(env.BRANCH_NAME == 'master') {​
+                    url = "[${​prodEnvProperties['BaseURL']}​/${​getDeployPath()}​](${​prodEnvProperties['BaseURL']}​/${​getDeployPath()}​)\n\n[${​testEnvProperties['BaseURL']}​/${​getDeployPath()}​](${​testEnvProperties['BaseURL']}​/${​getDeployPath()}​)"
+                }​ else {​
+                    url = "[${​testEnvProperties['BaseURL']}​/${​getDeployPath()}​](${​testEnvProperties['BaseURL']}​/${​getDeployPath()}​)"
+                }​
+                withCredentials([string(credentialsId: 'Teams-Webhook-SpotlightCloud-DevOps-Channel', variable: 'WEBHOOK')]) {​
+                    office365ConnectorSend webhookUrl: WEBHOOK, color: '#6CE26C', status: 'SUCCESS', message: "SUCCESS: Job ['${​env.JOB_NAME}​ [${​env.BUILD_NUMBER}​]'](${​env.BUILD_URL}​)\n\nDeployed: ${​url}​"
+                }​
+            }​
+            deleteDir()
+        }​
+        failure {​
+            withCredentials([string(credentialsId: 'Teams-Webhook-SpotlightCloud-DevOps-Channel', variable: 'WEBHOOK')]) {​
+                office365ConnectorSend webhookUrl: WEBHOOK, color: '#FF0000', status: 'FAILED', message: "FAILED: Job ['${​env.JOB_NAME}​ [${​env.BUILD_NUMBER}​]'](${​env.BUILD_URL}​)"
+            }​
+            deleteDir()
+        }​
+        unstable {​
+            withCredentials([string(credentialsId: 'Teams-Webhook-SpotlightCloud-DevOps-Channel', variable: 'WEBHOOK')]) {​
+                office365ConnectorSend webhookUrl: WEBHOOK, color: '#FF0000', status: 'UNSTABLE', message: "UNSTABLE: Job ['${​env.JOB_NAME}​ [${​env.BUILD_NUMBER}​]'](${​env.BUILD_URL}​)"
+            }​
+            deleteDir()
+        }​
+        aborted {​
+            withCredentials([string(credentialsId: 'Teams-Webhook-SpotlightCloud-DevOps-Channel', variable: 'WEBHOOK')]) {​
+                office365ConnectorSend webhookUrl: WEBHOOK, color: '#FF0000', status: 'ABORTED', message: "ABORTED: Job ['${​env.JOB_NAME}​ [${​env.BUILD_NUMBER}​]'](${​env.BUILD_URL}​)"
+            }​
+            deleteDir()
+        }​
+    }​
+}​
+String getDeployPath() {​
+    if(env.BRANCH_NAME == 'master') {​
+        return ''
+    }​ else {​
+        return "branch/$BRANCH_NAME/"
+    }​
+}​
